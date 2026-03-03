@@ -48,7 +48,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			"tools": []any{
 				map[string]any{
 					"name":        "check_login_status",
-					"description": "Check placeholder login status by platform/account.",
+					"description": "Check login status by platform/account.",
 					"inputSchema": map[string]any{
 						"type": "object",
 						"properties": map[string]any{
@@ -60,7 +60,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				},
 				map[string]any{
 					"name":        "start_login",
-					"description": "Start placeholder login flow by platform/account.",
+					"description": "Start login flow by platform/account.",
 					"inputSchema": map[string]any{
 						"type": "object",
 						"properties": map[string]any{

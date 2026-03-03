@@ -15,9 +15,13 @@ Go 1.22+ skeleton for a future Douyin + Kuaishou automated comment system.
   - comment
   - persistence
 - Platform abstraction `Login / CheckLogin / Search / Comment`
-- Placeholder clients:
+- Platform client stubs:
   - `internal/platform/douyin`
   - `internal/platform/kuaishou`
+- Runtime policy:
+  - no mock/generated post data
+  - no in-memory fake login state
+  - unimplemented browser automation methods return typed `not implemented` errors
 - Selector loading from `selectors/*.yaml`
 - REST API endpoints:
   - `GET /health`
@@ -118,10 +122,10 @@ Reference report:
 
 ## Notes for future go-rod integration
 
-- Replace placeholder implementations in:
+- Implement browser automation in:
   - `internal/platform/douyin/client.go`
   - `internal/platform/kuaishou/client.go`
 - Keep current `platform.Client` interface unchanged for minimal upper-layer impact.
 - Map selectors from `selectors/*.yaml` to real rod element queries.
-- Persist login session/cookies outside in-memory placeholder state.
+- Persist login session/cookies in real storage.
 - Extend error typing in platform layer so engine can classify retryable errors.

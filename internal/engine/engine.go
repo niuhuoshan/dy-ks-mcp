@@ -128,6 +128,11 @@ func (r *Runner) Run(ctx context.Context, client platform.Client, req RunRequest
 		TimeRange: req.TimeRange,
 	})
 	if err != nil {
+		if platform.IsNotImplemented(err) {
+			result.Failures++
+			result.addError(err.Error())
+			return result, nil
+		}
 		return result, fmt.Errorf("search posts: %w", err)
 	}
 
@@ -174,6 +179,9 @@ func (r *Runner) Run(ctx context.Context, client platform.Client, req RunRequest
 		if err != nil {
 			result.Failures++
 			result.addError(fmt.Sprintf("comment failed for %s: %v", post.ID, err))
+			if platform.IsNotImplemented(err) {
+				break
+			}
 			breaker.RecordFailure(now, r.cfg.CircuitBreaker.FailureThreshold, r.openFor)
 			continue
 		}
