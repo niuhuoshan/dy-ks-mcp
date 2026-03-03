@@ -1,0 +1,32 @@
+server:
+  host: "0.0.0.0"
+  port: 8080
+
+store:
+  sqlite_path: "./data/dy-ks-mcp.db"
+
+platform:
+  selectors_dir: "./selectors"
+
+engine:
+  rate_limit:
+    actions: 10
+    per: "1m"
+  random_pause:
+    min_ms: 300
+    max_ms: 900
+  time_window:
+    timezone: "Asia/Shanghai"
+    start: "08:00"
+    end: "23:30"
+  circuit_breaker:
+    failure_threshold: 3
+    open_for: "2m"
+  filter:
+    blocked_keywords:
+      - "ad"
+      - "sponsored"
+  comment_templates:
+    - "Thanks for sharing, very useful."
+    - "Good point, learned something new."
+    - "Clear and practical content, appreciate it."

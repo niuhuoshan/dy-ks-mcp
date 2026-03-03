@@ -1,0 +1,21 @@
+platform: "douyin"
+selectors:
+  login_button: "button:has-text('登录')"
+  nav_search_link: "a[href*='/aisearch']"
+  search_input: "input[placeholder*='搜索你感兴趣的内容'], input[placeholder*='搜索']"
+  search_submit: "button:has-text('搜索')"
+
+  # Classic search route (when /search/<keyword> is available)
+  toolbar_root: "#search-toolbar-container"
+  sort_comprehensive: "#search-toolbar-container span:has-text('综合')"
+  sort_latest: "#search-toolbar-container span:has-text('最新')"
+  tab_video: "#search-toolbar-container span:has-text('视频')"
+  tab_user: "#search-toolbar-container span:has-text('用户')"
+  filter_button: "#search-toolbar-container div:has-text('筛选')"
+
+  result_card: "div[data-e2e='search-result-card'], div:has(a[href*='/video/'])"
+  post_link: "a[href*='/video/']"
+
+  comment_button: "button:has-text('评论'), div:has-text('评论')"
+  comment_input: "div[contenteditable='true'], textarea, input[placeholder*='说点什么']"
+  comment_submit: "button:has-text('发布'), button:has-text('发送')"
