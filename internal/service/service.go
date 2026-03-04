@@ -51,13 +51,7 @@ func (s *Service) RunCommentTaskWithStatus(ctx context.Context, req engine.RunRe
 	}
 
 	result := RunTaskResponse{
-		Result: engine.RunResult{
-			Platform:  strings.ToLower(strings.TrimSpace(req.Platform)),
-			AccountID: defaultAccount(req.AccountID),
-			Keyword:   req.Keyword,
-			SortBy:    platform.NormalizeSortBy(req.SortBy),
-			TimeRange: platform.NormalizeTimeRange(req.TimeRange),
-		},
+		Result: normalizedRunResult(req),
 	}
 
 	runResult, err := s.RunCommentTask(ctx, req)
@@ -86,13 +80,7 @@ func (s *Service) RunCommentTaskWithStatus(ctx context.Context, req engine.RunRe
 
 func (s *Service) planRunForAgent(ctx context.Context, req engine.RunRequest, targetIndex int) RunTaskResponse {
 	result := RunTaskResponse{
-		Result: engine.RunResult{
-			Platform:  strings.ToLower(strings.TrimSpace(req.Platform)),
-			AccountID: defaultAccount(req.AccountID),
-			Keyword:   req.Keyword,
-			SortBy:    platform.NormalizeSortBy(req.SortBy),
-			TimeRange: platform.NormalizeTimeRange(req.TimeRange),
-		},
+		Result: normalizedRunResult(req),
 	}
 
 	search := s.SearchPosts(ctx, SearchPostsRequest{
@@ -156,50 +144,14 @@ func (s *Service) planRunForAgent(ctx context.Context, req engine.RunRequest, ta
 }
 
 func (s *Service) planDouyinForAgent(req engine.RunRequest) RunTaskResponse {
-	platformName := strings.ToLower(strings.TrimSpace(req.Platform))
-	if platformName == "" {
-		platformName = "douyin"
+	issue := douyinManualSearchIssue(req.Keyword, "douyin search is agent-led; use browser tool to search and pick target post manually")
+	return RunTaskResponse{
+		Status:     StatusBlocked,
+		Result:     normalizedRunResult(req),
+		Error:      issue,
+		AgentHints: issue.AgentHints,
+		Artifacts:  issue.Artifacts,
 	}
-	keyword := strings.TrimSpace(req.Keyword)
-	searchURL := "https://www.douyin.com/search?type=video"
-	if keyword != "" {
-		searchURL = fmt.Sprintf("https://www.douyin.com/search/%s?type=video", keyword)
-	}
-
-	result := RunTaskResponse{
-		Status: StatusBlocked,
-		Result: engine.RunResult{
-			Platform:  platformName,
-			AccountID: defaultAccount(req.AccountID),
-			Keyword:   keyword,
-			SortBy:    platform.NormalizeSortBy(req.SortBy),
-			TimeRange: platform.NormalizeTimeRange(req.TimeRange),
-		},
-		Error: &ToolIssue{
-			Stage:         "search",
-			Code:          "AGENT_BROWSER_REQUIRED",
-			Message:       "douyin search is agent-led; use browser tool to search and pick target post manually",
-			Retriable:     false,
-			RequiresAgent: true,
-			AgentHints: []string{
-				"在浏览器中打开抖音搜索页，并手动设置 最新 + 一周内",
-				"从目标视频 URL 提取 post_id 后调用 submit_comment（或直接传 post_url）",
-			},
-			Artifacts: map[string]any{
-				"search_url": searchURL,
-				"next_tool":  "submit_comment",
-			},
-		},
-		AgentHints: []string{
-			"在浏览器中打开抖音搜索页，并手动设置 最新 + 一周内",
-			"从目标视频 URL 提取 post_id 后调用 submit_comment（或直接传 post_url）",
-		},
-		Artifacts: map[string]any{
-			"search_url": searchURL,
-			"next_tool":  "submit_comment",
-		},
-	}
-	return result
 }
 
 func (s *Service) SearchPosts(ctx context.Context, req SearchPostsRequest) SearchPostsResponse {
@@ -212,24 +164,7 @@ func (s *Service) SearchPosts(ctx context.Context, req SearchPostsRequest) Searc
 	}
 
 	if isDouyin(req.Platform) {
-		searchURL := "https://www.douyin.com/search?type=video"
-		if strings.TrimSpace(req.Keyword) != "" {
-			searchURL = fmt.Sprintf("https://www.douyin.com/search/%s?type=video", strings.TrimSpace(req.Keyword))
-		}
-		issue := &ToolIssue{
-			Stage:         "search",
-			Code:          "AGENT_BROWSER_REQUIRED",
-			Message:       "douyin search is disabled in MCP; use browser agent to perform search and select target",
-			RequiresAgent: true,
-			AgentHints: []string{
-				"使用 browser 工具打开抖音搜索页，手动设为 最新 + 一周内",
-				"确认目标视频后，将 post_url/post_id 交给 submit_comment",
-			},
-			Artifacts: map[string]any{
-				"search_url": searchURL,
-				"next_tool":  "submit_comment",
-			},
-		}
+		issue := douyinManualSearchIssue(req.Keyword, "douyin search is disabled in MCP; use browser agent to perform search and select target")
 		resp.Status = StatusBlocked
 		resp.Error = issue
 		resp.AgentHints = issue.AgentHints
@@ -501,6 +436,42 @@ func defaultAccount(accountID string) string {
 		return "default"
 	}
 	return accountID
+}
+
+func normalizedRunResult(req engine.RunRequest) engine.RunResult {
+	return engine.RunResult{
+		Platform:  strings.ToLower(strings.TrimSpace(req.Platform)),
+		AccountID: defaultAccount(req.AccountID),
+		Keyword:   req.Keyword,
+		SortBy:    platform.NormalizeSortBy(req.SortBy),
+		TimeRange: platform.NormalizeTimeRange(req.TimeRange),
+	}
+}
+
+func douyinSearchURL(keyword string) string {
+	trimmed := strings.TrimSpace(keyword)
+	if trimmed == "" {
+		return "https://www.douyin.com/search?type=video"
+	}
+	return fmt.Sprintf("https://www.douyin.com/search/%s?type=video", trimmed)
+}
+
+func douyinManualSearchIssue(keyword string, message string) *ToolIssue {
+	return &ToolIssue{
+		Stage:         "search",
+		Code:          "AGENT_BROWSER_REQUIRED",
+		Message:       message,
+		Retriable:     false,
+		RequiresAgent: true,
+		AgentHints: []string{
+			"在浏览器中打开抖音搜索页，并手动设置 最新 + 一周内",
+			"从目标视频 URL 提取 post_id 后调用 submit_comment（或直接传 post_url）",
+		},
+		Artifacts: map[string]any{
+			"search_url": douyinSearchURL(keyword),
+			"next_tool":  "submit_comment",
+		},
+	}
 }
 
 func isDouyin(platformName string) bool {
