@@ -214,9 +214,11 @@ node ./tools/probe-selectors.mjs
 
 Probe output is used to update `selectors/douyin.yaml` and `selectors/kuaishou.yaml`.
 
-Reference report:
+Reference docs:
 
 - `docs/browser-probe-2026-03-03.md`
+- `docs/agent-first-sop.md`
+- `docs/architecture-flow.md`
 
 ## Notes for future go-rod integration
 
