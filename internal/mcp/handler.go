@@ -3,8 +3,10 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	"dy-ks-mcp/internal/engine"
 	"dy-ks-mcp/internal/service"
@@ -37,75 +39,162 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			"protocolVersion": "2025-06-18",
 			"serverInfo": map[string]any{
 				"name":    "dy-ks-mcp",
-				"version": "0.1.0",
+				"version": "0.2.0",
 			},
 			"capabilities": map[string]any{
 				"tools": map[string]any{},
 			},
 		})
 	case "tools/list":
-		writeRPCResult(w, req.ID, map[string]any{
-			"tools": []any{
-				map[string]any{
-					"name":        "check_login_status",
-					"description": "Check login status by platform/account.",
-					"inputSchema": map[string]any{
-						"type": "object",
-						"properties": map[string]any{
-							"platform":   map[string]any{"type": "string"},
-							"account_id": map[string]any{"type": "string"},
-						},
-						"required": []string{"platform"},
-					},
-				},
-				map[string]any{
-					"name":        "start_login",
-					"description": "Start login flow by platform/account.",
-					"inputSchema": map[string]any{
-						"type": "object",
-						"properties": map[string]any{
-							"platform":   map[string]any{"type": "string"},
-							"account_id": map[string]any{"type": "string"},
-						},
-						"required": []string{"platform"},
-					},
-				},
-				map[string]any{
-					"name":        "run_comment_task",
-					"description": "Run one search-comment pipeline task.",
-					"inputSchema": map[string]any{
-						"type": "object",
-						"properties": map[string]any{
-							"platform":   map[string]any{"type": "string"},
-							"account_id": map[string]any{"type": "string"},
-							"keyword":    map[string]any{"type": "string"},
-							"sort_by": map[string]any{
-								"type":        "string",
-								"enum":        []string{"comprehensive", "latest"},
-								"default":     "comprehensive",
-								"description": "search sort mode",
-							},
-							"time_range": map[string]any{
-								"type":    "string",
-								"enum":    []string{"all", "day", "week", "month", "year"},
-								"default": "all",
-							},
-							"limit": map[string]any{"type": "integer", "minimum": 1},
-						},
-						"required": []string{"platform", "keyword"},
-					},
-				},
-			},
-		})
+		writeRPCResult(w, req.ID, map[string]any{"tools": toolSpecs()})
 	case "tools/call":
-		result, err := h.callTool(r.Context(), req.Params)
+		ctx, cancel := context.WithTimeout(r.Context(), 95*time.Second)
+		defer cancel()
+		result, err := h.callTool(ctx, req.Params)
 		if err != nil {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				writeRPCError(w, req.ID, -32001, "tool call timeout")
+				return
+			}
 			writeRPCError(w, req.ID, -32000, err.Error())
 			return
 		}
 		writeRPCResult(w, req.ID, result)
 	default:
 		writeRPCError(w, req.ID, -32601, "method not found")
+	}
+}
+
+func toolSpecs() []any {
+	return []any{
+		map[string]any{
+			"name":        "check_login_status",
+			"description": "Check login status by platform/account.",
+			"inputSchema": map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"platform":   map[string]any{"type": "string"},
+					"account_id": map[string]any{"type": "string"},
+				},
+				"required": []string{"platform"},
+			},
+		},
+		map[string]any{
+			"name":        "start_login",
+			"description": "Start login flow by platform/account.",
+			"inputSchema": map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"platform":   map[string]any{"type": "string"},
+					"account_id": map[string]any{"type": "string"},
+				},
+				"required": []string{"platform"},
+			},
+		},
+		map[string]any{
+			"name":        "search_posts",
+			"description": "Search posts; return structured status + agent hints.",
+			"inputSchema": map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"platform":   map[string]any{"type": "string"},
+					"account_id": map[string]any{"type": "string"},
+					"keyword":    map[string]any{"type": "string"},
+					"sort_by": map[string]any{
+						"type":    "string",
+						"enum":    []string{"comprehensive", "latest"},
+						"default": "comprehensive",
+					},
+					"time_range": map[string]any{
+						"type":    "string",
+						"enum":    []string{"all", "day", "week", "month", "year"},
+						"default": "all",
+					},
+					"limit": map[string]any{"type": "integer", "minimum": 1},
+				},
+				"required": []string{"platform", "keyword"},
+			},
+		},
+		map[string]any{
+			"name":        "prepare_comment_target",
+			"description": "Resolve one candidate post for commenting.",
+			"inputSchema": map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"platform":   map[string]any{"type": "string"},
+					"account_id": map[string]any{"type": "string"},
+					"keyword":    map[string]any{"type": "string"},
+					"sort_by": map[string]any{
+						"type":    "string",
+						"enum":    []string{"comprehensive", "latest"},
+						"default": "comprehensive",
+					},
+					"time_range": map[string]any{
+						"type":    "string",
+						"enum":    []string{"all", "day", "week", "month", "year"},
+						"default": "all",
+					},
+					"limit": map[string]any{"type": "integer", "minimum": 1},
+					"index": map[string]any{"type": "integer", "minimum": 0, "default": 0},
+				},
+				"required": []string{"platform", "keyword"},
+			},
+		},
+		map[string]any{
+			"name":        "submit_comment",
+			"description": "Submit comment to selected post and return structured issue on failure. Accepts post_id or post_url.",
+			"inputSchema": map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"platform":   map[string]any{"type": "string"},
+					"account_id": map[string]any{"type": "string"},
+					"post_id":    map[string]any{"type": "string"},
+					"post_url":   map[string]any{"type": "string"},
+					"content":    map[string]any{"type": "string"},
+					"keyword":    map[string]any{"type": "string"},
+				},
+				"required": []string{"platform", "content"},
+			},
+		},
+		map[string]any{
+			"name":        "verify_comment",
+			"description": "Verify comment existence from local dedupe store.",
+			"inputSchema": map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"platform":   map[string]any{"type": "string"},
+					"account_id": map[string]any{"type": "string"},
+					"post_id":    map[string]any{"type": "string"},
+				},
+				"required": []string{"platform", "post_id"},
+			},
+		},
+		map[string]any{
+			"name":        "run_comment_task",
+			"description": "Best-effort pipeline. Default searches/prepares target for agent confirmation; Douyin is always agent-manual search + MCP submit.",
+			"inputSchema": map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"platform":   map[string]any{"type": "string"},
+					"account_id": map[string]any{"type": "string"},
+					"keyword":    map[string]any{"type": "string"},
+					"sort_by": map[string]any{
+						"type":    "string",
+						"enum":    []string{"comprehensive", "latest"},
+						"default": "comprehensive",
+					},
+					"time_range": map[string]any{
+						"type":    "string",
+						"enum":    []string{"all", "day", "week", "month", "year"},
+						"default": "all",
+					},
+					"limit":        map[string]any{"type": "integer", "minimum": 1},
+					"target_index": map[string]any{"type": "integer", "minimum": 0, "default": 0},
+					"auto_submit":  map[string]any{"type": "boolean", "default": false},
+				},
+				"required": []string{"platform", "keyword"},
+			},
+		},
 	}
 }
 
@@ -141,6 +230,113 @@ func (h *Handler) callTool(ctx context.Context, raw json.RawMessage) (any, error
 			"account_id": defaultAccount(accountID),
 			"started":    true,
 		}), nil
+	case "search_posts":
+		platformName, err := readStringArg(params.Arguments, "platform", true)
+		if err != nil {
+			return nil, err
+		}
+		keyword, err := readStringArg(params.Arguments, "keyword", true)
+		if err != nil {
+			return nil, err
+		}
+		accountID, _ := readStringArg(params.Arguments, "account_id", false)
+		sortBy, err := readStringArg(params.Arguments, "sort_by", false)
+		if err != nil {
+			return nil, err
+		}
+		timeRange, err := readStringArg(params.Arguments, "time_range", false)
+		if err != nil {
+			return nil, err
+		}
+		limit, err := readIntArg(params.Arguments, "limit", false)
+		if err != nil {
+			return nil, err
+		}
+		result := h.svc.SearchPosts(ctx, service.SearchPostsRequest{
+			Platform:  platformName,
+			AccountID: accountID,
+			Keyword:   keyword,
+			SortBy:    sortBy,
+			TimeRange: timeRange,
+			Limit:     limit,
+		})
+		return toolResult(result), nil
+	case "prepare_comment_target":
+		platformName, err := readStringArg(params.Arguments, "platform", true)
+		if err != nil {
+			return nil, err
+		}
+		keyword, err := readStringArg(params.Arguments, "keyword", true)
+		if err != nil {
+			return nil, err
+		}
+		accountID, _ := readStringArg(params.Arguments, "account_id", false)
+		sortBy, err := readStringArg(params.Arguments, "sort_by", false)
+		if err != nil {
+			return nil, err
+		}
+		timeRange, err := readStringArg(params.Arguments, "time_range", false)
+		if err != nil {
+			return nil, err
+		}
+		limit, err := readIntArg(params.Arguments, "limit", false)
+		if err != nil {
+			return nil, err
+		}
+		index, err := readIntArg(params.Arguments, "index", false)
+		if err != nil {
+			return nil, err
+		}
+		result := h.svc.PrepareCommentTarget(ctx, service.PrepareCommentTargetRequest{
+			Platform:  platformName,
+			AccountID: accountID,
+			Keyword:   keyword,
+			SortBy:    sortBy,
+			TimeRange: timeRange,
+			Limit:     limit,
+			Index:     index,
+		})
+		return toolResult(result), nil
+	case "submit_comment":
+		platformName, err := readStringArg(params.Arguments, "platform", true)
+		if err != nil {
+			return nil, err
+		}
+		postID, err := readStringArg(params.Arguments, "post_id", false)
+		if err != nil {
+			return nil, err
+		}
+		postURL, err := readStringArg(params.Arguments, "post_url", false)
+		if err != nil {
+			return nil, err
+		}
+		content, err := readStringArg(params.Arguments, "content", true)
+		if err != nil {
+			return nil, err
+		}
+		accountID, _ := readStringArg(params.Arguments, "account_id", false)
+		keyword, _ := readStringArg(params.Arguments, "keyword", false)
+		result := h.svc.SubmitComment(ctx, service.SubmitCommentRequest{
+			Platform:  platformName,
+			AccountID: accountID,
+			PostID:    postID,
+			PostURL:   postURL,
+			Content:   content,
+			Keyword:   keyword,
+		})
+		return toolResult(result), nil
+	case "verify_comment":
+		platformName, err := readStringArg(params.Arguments, "platform", true)
+		if err != nil {
+			return nil, err
+		}
+		postID, err := readStringArg(params.Arguments, "post_id", true)
+		if err != nil {
+			return nil, err
+		}
+		accountID, _ := readStringArg(params.Arguments, "account_id", false)
+		result := h.svc.VerifyComment(ctx, platformName, accountID, postID)
+		return toolResult(result), nil
 	case "run_comment_task":
 		platformName, err := readStringArg(params.Arguments, "platform", true)
 		if err != nil {
@@ -163,17 +359,22 @@ func (h *Handler) callTool(ctx context.Context, raw json.RawMessage) (any, error
 		if err != nil {
 			return nil, err
 		}
-		result, err := h.svc.RunCommentTask(ctx, engine.RunRequest{
+		targetIndex, err := readIntArg(params.Arguments, "target_index", false)
+		if err != nil {
+			return nil, err
+		}
+		autoSubmit, err := readBoolArg(params.Arguments, "auto_submit", false)
+		if err != nil {
+			return nil, err
+		}
+		result := h.svc.RunCommentTaskWithStatus(ctx, engine.RunRequest{
 			Platform:  platformName,
 			AccountID: accountID,
 			Keyword:   keyword,
 			SortBy:    sortBy,
 			TimeRange: timeRange,
 			Limit:     limit,
-		})
-		if err != nil {
-			return nil, err
-		}
+		}, autoSubmit, targetIndex)
 		return toolResult(result), nil
 	default:
 		return nil, fmt.Errorf("unknown tool %q", params.Name)
@@ -250,6 +451,21 @@ func readIntArg(args map[string]any, key string, required bool) (int, error) {
 	default:
 		return 0, fmt.Errorf("argument %q must be integer", key)
 	}
+}
+
+func readBoolArg(args map[string]any, key string, required bool) (bool, error) {
+	v, ok := args[key]
+	if !ok {
+		if required {
+			return false, fmt.Errorf("missing argument %q", key)
+		}
+		return false, nil
+	}
+	b, ok := v.(bool)
+	if !ok {
+		return false, fmt.Errorf("argument %q must be boolean", key)
+	}
+	return b, nil
 }
 
 func defaultAccount(accountID string) string {

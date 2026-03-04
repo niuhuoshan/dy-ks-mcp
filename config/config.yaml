@@ -1,12 +1,23 @@
 server:
   host: "0.0.0.0"
-  port: 8080
+  port: 18080
 
 store:
   sqlite_path: "./data/dy-ks-mcp.db"
 
 platform:
   selectors_dir: "./selectors"
+  browser:
+    node_binary: "node"
+    script_path: "./tools/platform-browser.mjs"
+    ws_url: "ws://127.0.0.1:18792/cdp"
+    headless: false
+    executable_path: ""
+    user_data_root: "./data/browser"
+    action_timeout: "20s"
+    navigation_timeout: "45s"
+    login_timeout: "10m"
+    post_load_wait_ms: 1500
 
 engine:
   rate_limit:

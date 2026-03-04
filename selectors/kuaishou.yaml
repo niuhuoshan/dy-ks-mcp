@@ -9,10 +9,10 @@ selectors:
   sort_latest: "button:has-text('最新'), span:has-text('最新')"
   filter_button: "button:has-text('筛选'), span:has-text('筛选')"
 
-  result_card: "main div:has(img):has-text('#求职'), main div:has(img):has-text('#找工作')"
-  post_link: "a[href*='/short-video/'], a[href*='/video/']"
+  result_card: "main div:has(img):has-text('#'), main div:has(img)"
+  post_link: "a[href*='/short-video/'], a[href*='/video/'], a[href*='photoId=']"
 
-  comment_button: ".hover-tip.commentPanel, div:has-text('评论')"
+  comment_button: ".hover-tip.commentPanel, button:has-text('评论'), div:has-text('评论')"
   comment_panel: ".side-area, .tab-nav-wrapper"
   comment_input: "textarea, div[contenteditable='true'], input[placeholder*='说点什么']"
-  comment_submit: "button:has-text('发布'), button:has-text('发送')"
+  comment_submit: "button:has-text('发布'), button:has-text('发送'), .send-btn:not(.disabled), .send-btn"

@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"sort"
 
+	"dy-ks-mcp/internal/config"
 	base "dy-ks-mcp/internal/platform"
 	"dy-ks-mcp/internal/platform/douyin"
 	"dy-ks-mcp/internal/platform/kuaishou"
@@ -14,12 +15,12 @@ type Registry struct {
 	clients map[string]base.Client
 }
 
-func New(selectorDir string) (*Registry, error) {
-	dyClient, err := douyin.NewClient(filepath.Join(selectorDir, "douyin.yaml"))
+func New(cfg config.PlatformConfig) (*Registry, error) {
+	dyClient, err := douyin.NewClient(filepath.Join(cfg.SelectorsDir, "douyin.yaml"), cfg.Browser)
 	if err != nil {
 		return nil, err
 	}
-	ksClient, err := kuaishou.NewClient(filepath.Join(selectorDir, "kuaishou.yaml"))
+	ksClient, err := kuaishou.NewClient(filepath.Join(cfg.SelectorsDir, "kuaishou.yaml"), cfg.Browser)
 	if err != nil {
 		return nil, err
 	}

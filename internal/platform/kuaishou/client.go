@@ -3,25 +3,53 @@ package kuaishou
 import (
 	"context"
 	"fmt"
-	"strings"
+	"time"
 
+	"dy-ks-mcp/internal/config"
 	base "dy-ks-mcp/internal/platform"
+	"dy-ks-mcp/internal/platform/worker"
 )
 
 type Client struct {
-	selectors base.SelectorSet
+	selectors map[string]string
+	nodeBin   string
+	script    string
+	browser   worker.BrowserSettings
 }
 
-func NewClient(selectorPath string) (*Client, error) {
+func NewClient(selectorPath string, browserCfg config.BrowserConfig) (*Client, error) {
 	selectors, err := base.LoadSelectorFile(selectorPath)
 	if err != nil {
 		return nil, fmt.Errorf("load kuaishou selectors: %w", err)
 	}
-	if selectors.Platform == "" {
-		selectors.Platform = "kuaishou"
+
+	actionTimeout, err := browserCfg.ActionTimeoutDuration()
+	if err != nil {
+		return nil, fmt.Errorf("parse browser action timeout: %w", err)
 	}
+	navTimeout, err := browserCfg.NavigationTimeoutDuration()
+	if err != nil {
+		return nil, fmt.Errorf("parse browser navigation timeout: %w", err)
+	}
+	loginTimeout, err := browserCfg.LoginTimeoutDuration()
+	if err != nil {
+		return nil, fmt.Errorf("parse browser login timeout: %w", err)
+	}
+
 	return &Client{
-		selectors: selectors,
+		selectors: selectors.Selectors,
+		nodeBin:   browserCfg.NodeBinary,
+		script:    browserCfg.ScriptPath,
+		browser: worker.NewBrowserSettings(
+			browserCfg.WSURL,
+			browserCfg.Headless,
+			browserCfg.ExecutablePath,
+			browserCfg.UserDataRoot,
+			actionTimeout,
+			navTimeout,
+			loginTimeout,
+			browserCfg.PostLoadWaitDuration(),
+		),
 	}, nil
 }
 
@@ -30,19 +58,37 @@ func (c *Client) Name() string {
 }
 
 func (c *Client) Login(ctx context.Context, accountID string) error {
-	if strings.TrimSpace(accountID) == "" {
-		return fmt.Errorf("account_id is required")
-	}
-	return c.loginWithBrowser(ctx, accountID)
+	accountID = defaultAccount(accountID)
+	_, err := c.run(ctx, worker.Request{
+		Action:    "login",
+		Platform:  c.Name(),
+		AccountID: accountID,
+	})
+	return err
 }
 
 func (c *Client) CheckLogin(ctx context.Context, accountID string) (base.LoginStatus, error) {
 	accountID = defaultAccount(accountID)
-	return base.LoginStatus{}, c.checkLoginWithBrowser(ctx, accountID)
+	resp, err := c.run(ctx, worker.Request{
+		Action:    "check_login",
+		Platform:  c.Name(),
+		AccountID: accountID,
+	})
+	if err != nil {
+		return base.LoginStatus{}, err
+	}
+
+	return base.LoginStatus{
+		Platform:  c.Name(),
+		AccountID: accountID,
+		LoggedIn:  resp.LoggedIn,
+		Message:   resp.Message,
+		CheckedAt: time.Now().UTC(),
+	}, nil
 }
 
 func (c *Client) Search(ctx context.Context, accountID string, query base.SearchQuery) ([]base.Post, error) {
-	if strings.TrimSpace(query.Keyword) == "" {
+	if query.Keyword == "" {
 		return nil, fmt.Errorf("keyword is required")
 	}
 	if query.Limit <= 0 {
@@ -50,52 +96,48 @@ func (c *Client) Search(ctx context.Context, accountID string, query base.Search
 	}
 	query.SortBy = base.NormalizeSortBy(query.SortBy)
 	query.TimeRange = base.NormalizeTimeRange(query.TimeRange)
-	return c.searchWithBrowser(ctx, defaultAccount(accountID), query)
+
+	resp, err := c.run(ctx, worker.Request{
+		Action:    "search",
+		Platform:  c.Name(),
+		AccountID: defaultAccount(accountID),
+		Keyword:   query.Keyword,
+		SortBy:    query.SortBy,
+		TimeRange: query.TimeRange,
+		Limit:     query.Limit,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return resp.Posts, nil
 }
 
 func (c *Client) Comment(ctx context.Context, accountID string, req base.CommentRequest) error {
-	if strings.TrimSpace(req.PostID) == "" {
+	if req.PostID == "" {
 		return fmt.Errorf("post_id is required")
 	}
-	if strings.TrimSpace(req.Content) == "" {
+	if req.Content == "" {
 		return fmt.Errorf("comment content is empty")
 	}
-	return c.commentWithBrowser(ctx, defaultAccount(accountID), req)
+	_, err := c.run(ctx, worker.Request{
+		Action:    "comment",
+		Platform:  c.Name(),
+		AccountID: defaultAccount(accountID),
+		PostID:    req.PostID,
+		Content:   req.Content,
+	})
+	return err
 }
 
-func (c *Client) loginWithBrowser(ctx context.Context, accountID string) error {
-	_ = ctx
-	_ = accountID
-	_ = c.selectors
-	return base.NewNotImplementedError(c.Name(), "Login")
-}
-
-func (c *Client) checkLoginWithBrowser(ctx context.Context, accountID string) error {
-	_ = ctx
-	_ = accountID
-	_ = c.selectors
-	return base.NewNotImplementedError(c.Name(), "CheckLogin")
-}
-
-func (c *Client) searchWithBrowser(ctx context.Context, accountID string, query base.SearchQuery) ([]base.Post, error) {
-	_ = ctx
-	_ = accountID
-	_ = query
-	_ = c.selectors
-	return nil, base.NewNotImplementedError(c.Name(), "Search")
-}
-
-func (c *Client) commentWithBrowser(ctx context.Context, accountID string, req base.CommentRequest) error {
-	_ = ctx
-	_ = accountID
-	_ = req
-	_ = c.selectors
-	return base.NewNotImplementedError(c.Name(), "Comment")
+func (c *Client) run(ctx context.Context, req worker.Request) (worker.Response, error) {
+	req.Selectors = c.selectors
+	req.Browser = c.browser
+	return worker.Run(ctx, c.nodeBin, c.script, req)
 }
 
 func defaultAccount(accountID string) string {
-	if strings.TrimSpace(accountID) == "" {
+	if accountID == "" {
 		return "default"
 	}
-	return strings.TrimSpace(accountID)
+	return accountID
 }

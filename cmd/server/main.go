@@ -43,7 +43,7 @@ func main() {
 		log.Fatalf("init sqlite schema: %v", err)
 	}
 
-	platformRegistry, err := registry.New(cfg.Platform.SelectorsDir)
+	platformRegistry, err := registry.New(cfg.Platform)
 	if err != nil {
 		log.Fatalf("init platform registry: %v", err)
 	}
@@ -53,7 +53,7 @@ func main() {
 		log.Fatalf("init engine: %v", err)
 	}
 
-	svc := service.New(platformRegistry, runner)
+	svc := service.New(platformRegistry, runner, sqliteStore)
 	mcpHandler := mcp.NewHandler(svc)
 	httpHandler := httpapi.NewHandler(svc)
 
@@ -65,10 +65,13 @@ func main() {
 		Addr:              addr,
 		Handler:           loggingMiddleware(mux),
 		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      100 * time.Second,
+		IdleTimeout:       90 * time.Second,
 	}
 
 	log.Printf("dy-ks-mcp server listening on %s", addr)
-	log.Printf("REST endpoints: /health /api/v1/run /api/v1/login/status /api/v1/login/start")
+	log.Printf("REST endpoints: /health /api/v1/run /api/v1/search /api/v1/comment/prepare /api/v1/comment/submit /api/v1/comment/verify /api/v1/login/status /api/v1/login/start")
 	log.Printf("MCP endpoint: /mcp")
 
 	go func() {
