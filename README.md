@@ -66,6 +66,8 @@ go run ./cmd/server -config ./config/config.yaml
 - English Guide: `docs/Guide.en.md`
 - Agent-first SOP: `docs/agent-first-sop.md`
 - 架构流程图：`docs/architecture-flow.md`
+- Skill 规范：`skills.md`
+- 安装规范（Agent）：`install.md`
 
 ## 说明
 
